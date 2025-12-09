@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>floofplayer</title>
+    <style>
+        /* dark theme because light mode is for boomers */
+        body {
+            background-color: #0f0f11;
+            color: #ccc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .main_wrapper {
+            position: relative;
+            width: 90%;
+            max-width: 1000px;
+            background: #1a1a1d;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        /* the glowy effect behind the player */
+        .ambience_glow {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            background: rgba(50, 100, 255, 0.1);
+            filter: blur(40px);
+            z-index: -1;
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .vid_container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            cursor: none; /* hide cursor when playing maybe? */
+        }
+
+        /* controls overlay */
+        .ctl_panel {
+            margin-top: 15px;
+            background: #252529;
+            padding: 15px;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #333;
+        }
+
+        .row_thing {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* buttons... */
+        button {
+            background-color: #0066ff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.1s, background-color 0.2s;
+            font-size: 14px;
+            user-select: none;
+        }
+
+        button:hover {
+            background-color: #0052cc;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button.danger_btn {
+            background-color: #ff3333;
+        }
+        
+        button.weird_btn {
+            background-color: #8a2be2;
+        }
+
+        /* inputs and sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: #333;
+            height: 6px;
+            border-radius: 5px;
+            flex-grow: 1;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #0066ff;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* progress bar */
+        .big_progress_wrap {
+            position: relative;
+            width: 100%;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .prog_fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: #0066ff;
+            width: 0%;
+            pointer-events: none;
+            transition: width 0.1s linear;
+        }
+
+        .buf_fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            width: 0%;
+            pointer-events: none;
+        }
+
+        /* other overlays */
+        .toast_msg {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .stats_box {
+            margin-top: 20px;
+            background: #111;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #00ff00;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #004400;
+            display: none; /* hidden by default */
+        }
+
+        .file_input_wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 5;
+        }
+        
+        .hidden_real_input {
+            display: none;
+        }
+
+        /* filters */
+        .filter_matrix { filter: sepia(100%) hue-rotate(90deg) saturate(200%); }
+        .filter_bw { filter: grayscale(100%) contrast(120%); }
+        .filter_deep { filter: saturate(300%) contrast(80%) brightness(120%); }
+        .filter_invert { filter: invert(100%); }
+        
+        .spinny_loader {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #333;
+            border-top: 4px solid #0066ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+            position: absolute;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+<div class="main_wrapper" id="mainWrapper">
+    <div class="ambience_glow" id="glowThing"></div>
+    
+    <div class="vid_container" id="vidBox">
+        <video id="theVideo" preload="metadata"></video>
+        <div class="spinny_loader" id="spinny"></div>
+        
+        <div class="file_input_wrapper" id="uploadPrompt">
+            <h2>Select a video file</h2>
+            <button onclick="document.getElementById('realFile').click()">Browse Files</button>
+            <input type="file" id="realFile" class="hidden_real_input" accept="video/*">
+        </div>
+
+        <div class="toast_msg" id="lilToast">Action!</div>
+    </div>
+
+    <div class="ctl_panel">
+        <div class="big_progress_wrap" id="trackLine">
+            <div class="buf_fill" id="bufBar"></div>
+            <div class="prog_fill" id="progBar"></div>
+        </div>
+
+        <div class="row_thing">
+            <button id="btnPlay">Play</button>
+            <button id="btnStop">Stop</button>
+            <span id="timeDisplay">00:00 / 00:00</span>
+            
+            <input type="range" id="volSlide" min="0" max="1" step="0.01" value="1" style="width: 80px;">
+            <button id="btnMute">Mute</button>
+        </div>
+
+        <div class="row_thing">
+            <button onclick="change_speed(0.5)">0.5x</button>
+            <button onclick="change_speed(1)">1x</button>
+            <button onclick="change_speed(2)">2x</button>
+            <button onclick="change_speed(4)">4x!?</button>
+            
+            <button id="btnPiP">PiP</button>
+            <button id="btnFull">Full</button>
+            <button class="weird_btn" id="btnSnap">Snap</button>
+            <button id="btnLoop">Loop: OFF</button>
+        </div>
+
+        <div class="row_thing">
+             <button class="weird_btn" onclick="toggle_ambience()">Ambience</button>
+             <button class="weird_btn" onclick="rotate_video()">Rotate</button>
+             <button class="weird_btn" onclick="step_frame(-1)">-1 Frame</button>
+             <button class="weird_btn" onclick="step_frame(1)">+1 Frame</button>
+             <button class="danger_btn" onclick="toggle_stats()">Tech Junk</button>
+             
+             <select id="filterSel" style="background: #333; color: white; border: none; padding: 8px; border-radius: 8px;">
+                 <option value="">Normal</option>
+                 <option value="filter_matrix">Matrix</option>
+                 <option value="filter_bw">Noir</option>
+                 <option value="filter_deep">Fried</option>
+                 <option value="filter_invert">Ghost</option>
+             </select>
+        </div>
+    </div>
+
+    <div class="stats_box" id="techLog">
+        <div>> System initialized...</div>
+    </div>
+</div>
+
+<script>
+    // i honestly dont know why i made half of these variables global but here we are
+    const vid = document.getElementById('theVideo');
+    const playBtn = document.getElementById('btnPlay');
+    const stopBtn = document.getElementById('btnStop');
+    const volSlider = document.getElementById('volSlide');
+    const muteBtn = document.getElementById('btnMute');
+    const timeDisp = document.getElementById('timeDisplay');
+    const progBar = document.getElementById('progBar');
+    const bufBar = document.getElementById('bufBar');
+    const track = document.getElementById('trackLine');
+    const fileIn = document.getElementById('realFile');
+    const upPrompt = document.getElementById('uploadPrompt');
+    const toast = document.getElementById('lilToast');
+    const logBox = document.getElementById('techLog');
+    const spinner = document.getElementById('spinny');
+    
+    let is_dragging = false;
+    let last_vol = 1;
+    let rotation_deg = 0;
+    let ambience_on = false;
+    let safety_lock = false; // prevents weird double clicks
+
+    // logging function because console.log is boring
+    function log_stuff(msg) {
+        if (!logBox) return;
+        const d = new Date();
+        const stamp = d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds();
+        const line = document.createElement('div');
+        line.innerText = `[${stamp}] ${msg}`;
+        logBox.prepend(line);
+        if (logBox.children.length > 50) {
+            logBox.removeChild(logBox.lastChild);
+        }
+    }
+
+    // file handling
+    fileIn.addEventListener('change', (e) => {
+        try {
+            const f = e.target.files[0];
+            if (f) {
+                const url = URL.createObjectURL(f);
+                vid.src = url;
+                upPrompt.style.display = 'none';
+                log_stuff("loaded file: " + f.name);
+                show_toast("Video Loaded");
+                play_video_maybe();
+            }
+        } catch (err) {
+            log_stuff("ERROR loading file: " + err);
+        }
+    });
+
+    // basic controls
+    playBtn.addEventListener('click', () => {
+        if (vid.paused) {
+            play_video_maybe();
+        } else {
+            vid.pause();
+            playBtn.innerText = "Play";
+            show_toast("Paused");
+        }
+    });
+
+    function play_video_maybe() {
+        // sometimes play fails if you havent interacted UwU
+        const p = vid.play();
+        if (p !== undefined) {
+            p.then(() => {
+                playBtn.innerText = "Pause";
+                spinner.style.display = 'none';
+                start_ambience_loop();
+            }).catch(e => {
+                console.log("browser blocked play", e);
+                spinner.style.display = 'none';
+            });
+        }
+    }
+
+    stopBtn.addEventListener('click', () => {
+        vid.pause();
+        vid.currentTime = 0;
+        playBtn.innerText = "Play";
+        upPrompt.style.display = 'block';
+        log_stuff("video stopped completely");
+    });
+
+    // volume sniffing
+    volSlider.addEventListener('input', (e) => {
+        vid.volume = e.target.value;
+        if (vid.volume > 0 && vid.muted) vid.muted = false;
+        update_vol_ui();
+    });
+
+    muteBtn.addEventListener('click', () => {
+        vid.muted = !vid.muted;
+        update_vol_ui();
+    });
+
+    function update_vol_ui() {
+        if (vid.muted) {
+            muteBtn.innerText = "Unmute";
+            volSlider.value = 0;
+        } else {
+            muteBtn.innerText = "Mute";
+            volSlider.value = vid.volume;
+        }
+    }
+
+    // time updates and progress bar sniff
+    vid.addEventListener('timeupdate', () => {
+        if (!is_dragging && vid.duration) {
+            const pct = (vid.currentTime / vid.duration) * 100;
+            progBar.style.width = pct + "%";
+            
+            // update buffer bar
+            if (vid.buffered.length > 0) {
+                // find the buffer range
+                for (let i = 0; i < vid.buffered.length; i++) {
+                    if (vid.buffered.start(i) <= vid.currentTime && vid.buffered.end(i) >= vid.currentTime) {
+                          const buf_pct = (vid.buffered.end(i) / vid.duration) * 100;
+                          bufBar.style.width = buf_pct + "%";
+                          break;
+                    }
+                }
+            }
+        }
+        update_time_text();
+        if (ambience_on) update_ambience_color();
+    });
+
+    function update_time_text() {
+        const cur = format_time(vid.currentTime);
+        const dur = format_time(vid.duration || 0);
+        timeDisp.innerText = `${cur} / ${dur}`;
+    }
+
+    // helper to make seconds look like 00:00
+    function format_time(s) {
+        if (isNaN(s)) return "00:00";
+        let m = Math.floor(s / 60);
+        let sec = Math.floor(s % 60);
+        if (m < 10) m = "0" + m;
+        if (sec < 10) sec = "0" + sec;
+        return m + ":" + sec;
+    }
+
+    // scrubbing logic
+    track.addEventListener('mousedown', (e) => {
+        is_dragging = true;
+        move_scrub(e);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (is_dragging) move_scrub(e);
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (is_dragging) {
+            is_dragging = false;
+            log_stuff("seeked to " + Math.floor(vid.currentTime));
+        }
+    });
+
+    function move_scrub(e) {
+        if (!vid.duration) return;
+        const rect = track.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        if (x < 0) x = 0;
+        if (x > rect.width) x = rect.width;
+        
+        const pct = x / rect.width;
+        vid.currentTime = pct * vid.duration;
+        progBar.style.width = (pct * 100) + "%";
+    }
+
+    // speed changes
+    window.change_speed = function(s) {
+        vid.playbackRate = s;
+        show_toast("Speed: " + s + "x");
+        log_stuff("speed changed to " + s);
+    };
+
+    // loop toggle
+    const loopBtn = document.getElementById('btnLoop');
+    loopBtn.addEventListener('click', () => {
+        vid.loop = !vid.loop;
+        loopBtn.innerText = vid.loop ? "Loop: ON" : "Loop: OFF";
+        loopBtn.style.color = vid.loop ? "#00ff00" : "white";
+        show_toast(vid.loop ? "Looping Enabled" : "Looping Disabled");
+    });
+
+    // fullscreen
+    document.getElementById('btnFull').addEventListener('click', () => {
+        const wrap = document.getElementById('vidBox'); // fullscreen just the video part usually
+        if (!document.fullscreenElement) {
+            if (wrap.requestFullscreen) wrap.requestFullscreen();
+            else if (wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+        }
+    });
+
+    // pip
+    document.getElementById('btnPiP').addEventListener('click', async () => {
+        try {
+            if (vid !== document.pictureInPictureElement) {
+                await vid.requestPictureInPicture();
+            } else {
+                await document.exitPictureInPicture();
+            }
+        } catch (error) {
+            log_stuff("PiP failed: " + error);
+            show_toast("PiP Error");
+        }
+    });
+
+    // screenshot
+    document.getElementById('btnSnap').addEventListener('click', () => {
+        if (vid.readyState < 2) return;
+        
+        const cvs = document.createElement('canvas');
+        cvs.width = vid.videoWidth;
+        cvs.height = vid.videoHeight;
+        const ctx = cvs.getContext('2d');
+        
+        // apply filters if any
+        const curFilter = document.getElementById('filterSel').value;
+        if (curFilter) {
+            ctx.filter = getComputedStyle(vid).filter;
+        }
+
+        // handle rotation in canvas drawing (this part is hard crack)
+        if (rotation_deg !== 0) {
+            ctx.translate(cvs.width/2, cvs.height/2);
+            ctx.rotate(rotation_deg * Math.PI / 180);
+            ctx.translate(-cvs.width/2, -cvs.height/2);
+        }
+
+        ctx.drawImage(vid, 0, 0, cvs.width, cvs.height);
+        
+        try {
+            const data = cvs.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = data;
+            link.download = 'snap_' + Date.now() + '.png';
+            link.click();
+            show_toast("Snapshot Taken!");
+            log_stuff("saved snapshot");
+        } catch (e) {
+            log_stuff("snapshot fail");
+        }
+    });
+
+    // filters
+    document.getElementById('filterSel').addEventListener('change', (e) => {
+        vid.className = e.target.value;
+        show_toast("Filter Applied");
+    });
+
+    // rotation logic
+    window.rotate_video = function() {
+        rotation_deg += 90;
+        if (rotation_deg >= 360) rotation_deg = 0;
+        vid.style.transform = `rotate(${rotation_deg}deg)`;
+        if (rotation_deg % 180 !== 0) {
+            vid.style.scale = "0.7"; 
+        } else {
+            vid.style.scale = "1";
+        }
+        log_stuff("rotated to " + rotation_deg);
+    };
+
+    // frame stepping
+    window.step_frame = function(dir) {
+        if (vid.paused) {
+            vid.currentTime += (dir * (1/30));
+        } else {
+            vid.pause();
+            show_toast("Paused to Step");
+        }
+    };
+
+    // ambience mode - samples video color to make background glow
+    // this will probably torture my pc
+    window.toggle_ambience = function() {
+        ambience_on = !ambience_on;
+        const g = document.getElementById('glowThing');
+        if (ambience_on) {
+            g.style.opacity = 1;
+            show_toast("Ambience ON");
+        } else {
+            g.style.opacity = 0;
+            show_toast("Ambience OFF");
+        }
+    };
+
+    function start_ambience_loop() {
+        const c = document.createElement('canvas');
+        c.width = 10;
+        c.height = 10;
+        const x = c.getContext('2d');
+        const g = document.getElementById('glowThing');
+
+        function loop() {
+            if (!ambience_on || vid.paused || vid.ended) {
+                requestAnimationFrame(loop);
+                return;
+            }
+            try {
+                x.drawImage(vid, 0, 0, 10, 10);
+                const p = x.getImageData(5, 5, 1, 1).data;
+                g.style.background = `rgba(${p[0]}, ${p[1]}, ${p[2]}, 0.6)`;
+            } catch(e) { /* ignore cross origin issues */ }
+            
+            requestAnimationFrame(loop);
+        }
+        loop();
+    }
+
+    function update_ambience_color() {
+    }
+
+    // toggle stats
+    window.toggle_stats = function() {
+        const s = document.getElementById('techLog');
+        if (s.style.display === 'block') {
+            s.style.display = 'none';
+        } else {
+            s.style.display = 'block';
+        }
+    };
+
+    let toast_timer;
+    function show_toast(txt) {
+        toast.innerText = txt;
+        toast.style.opacity = 1;
+        clearTimeout(toast_timer);
+        toast_timer = setTimeout(() => {
+            toast.style.opacity = 0;
+        }, 2000);
+    }
+
+    // shortcuts
+    document.addEventListener('keydown', (e) => {
+        // dont trigger if typing in some input (not that we have many)
+        if (e.target.tagName === 'INPUT') return;
+
+        switch(e.key.toLowerCase()) {
+            case ' ':
+            case 'k':
+                e.preventDefault();
+                playBtn.click();
+                break;
+            case 'f':
+                document.getElementById('btnFull').click();
+                break;
+            case 'm':
+                muteBtn.click();
+                break;
+            case 'arrowright':
+                vid.currentTime += 5;
+                show_toast("+5s");
+                break;
+            case 'arrowleft':
+                vid.currentTime -= 5;
+                show_toast("-5s");
+                break;
+            case 'arrowup':
+                e.preventDefault();
+                if (vid.volume < 0.9) vid.volume += 0.1;
+                else vid.volume = 1;
+                update_vol_ui();
+                show_toast("Vol: " + Math.round(vid.volume*100) + "%");
+                break;
+            case 'arrowdown':
+                e.preventDefault();
+                if (vid.volume > 0.1) vid.volume -= 0.1;
+                else vid.volume = 0;
+                update_vol_ui();
+                show_toast("Vol: " + Math.round(vid.volume*100) + "%");
+                break;
+        }
+    });
+
+    // waiting event for buffering
+    vid.addEventListener('waiting', () => {
+        spinner.style.display = 'block';
+        log_stuff("buffering...");
+    });
+    
+    vid.addEventListener('playing', () => {
+        spinner.style.display = 'none';
+    });
+
+    vid.addEventListener('error', (e) => {
+        spinner.style.display = 'none';
+        show_toast("Video Error!");
+        log_stuff("FATAL ERROR: " + vid.error.message);
+    });
+    
+    // please
+    log_stuff("sniff me");
+
+</script>
+</body>
+</html>
